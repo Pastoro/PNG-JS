@@ -5,48 +5,53 @@ class png {
 
     /**
      * Create chunked data from file.
-     * @param {Event} target The event object containing the file input.
+     * @param {Event} event The event object containing the file input.
      * @constructor Returns a promise for a png object which includes the raw PNG image data.
      */
-    constructor(target) {
-        if (!typeof target === "object" || target === "null") {
+    constructor(event) {
+        if (!typeof event === "object" || event === "null") {
             throw new Error("Invalid target.");
         }
-        if (target.target.files[0].type !== "image/png") {
+        if (event.target.files[0].type !== "image/png") {
             throw new Error("Supplied files have to be of type image/png.");
         }
         this.data = null;
         return (async () => {
-            await this.#initialize(target);
+            await this.#initialize(event);
             return this;
         })();
     }
 
     /**
      * Initializes the PNG object with raw data.
-     * @param {Event} target The event object containing the file input. 
+     * @param {Event} event The event object containing the file input. 
      * @private
      */
-    async #initialize(target) {
-        const arrayBuffer = await this.#readBlob(target);
+    async #initialize(event) {
+        const arrayBuffer = await this.#readBlob(event);
         const { chunks: data } = await this.parseChunks(arrayBuffer);
         this.data = data;
     }
 
     /**
      * Read the file blob as an ArrayBuffer.
-     * @param {Event} target The event object containing the file input.
+     * @param {Event} event The event object containing the file input.
      * @returns {Promise<ArrayBuffer>} The PNG file data as an ArrayBuffer.
      * @private
      */
-    async #readBlob(target) {
+    async #readBlob(event) {
+        let file;
+        if (event.target) { file = event.target.files[0]; } else {
+            //Presume the argument passed was a file.
+            file = event;
+        }
         let fr = new FileReader();
         return new Promise((resolve, reject) => {
             fr.onload = () => {
                 resolve(fr.result);
             };
             fr.onerror = reject;
-            fr.readAsArrayBuffer(target.target.files[0], "UTF-8");
+            fr.readAsArrayBuffer(file, "UTF-8");
         });
     }
     /**
@@ -66,7 +71,7 @@ class png {
 
         let utf8Decode = new TextDecoder("utf-8");
         let chunks = [];
-        //First 8 bytes are the file signature which
+        //First 8 bytes are the file signature which should be reconstructed by the user after modifying the image.
         let pos = 8;
         let size, crc, offset, fourCC;
 
@@ -91,6 +96,11 @@ class png {
                     chunkInfo: {
                         widthPixels: dataView.getUint32(16),
                         heightPixels: dataView.getUint32(20),
+                        bitDepth: dataView.getUint32(21),
+                        colourType: dataView.getUint32(22),
+                        compressionMethod: dataView.getUint32(23),
+                        filterMethod: dataView.getUint32(24),
+                        interlaceMethod: dataView.getUint32(25),
                     },
                 });
             } else {
@@ -376,7 +386,7 @@ class png {
      * @param {number} separation Number of pixels separating tiles from one another.
      * @param {{ignoredColour: number[]}} options Ignored RGBA value gets converted to [0,0,0,0].
      */
-    subimage(imageDataBuffer, tileSize, margins = { xMargin: 0, yMargin: 0 }, separation = 0, options = { ignoredColour: [0, 0, 0, 0] }) {
+    subImage(imageDataBuffer, tileSize, margins = { xMargin: 0, yMargin: 0 }, separation = 0, options = { ignoredColour: [0, 0, 0, 0] }) {
 
         if (!Array.isArray(imageDataBuffer)) {
             throw new Error(`Incorrect type for imageDataBuffer. Type of ${typeof imageDataBuffer}`);
