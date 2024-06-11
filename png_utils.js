@@ -398,9 +398,6 @@ class png {
         if (typeof margins !== 'object' || typeof margins.xMargin !== 'number' || typeof margins.yMargin !== 'number') {
             throw new Error(`Invalid margins: ${JSON.stringify(margins)}.`);
         }
-        if (typeof options !== 'object' || !('ignoredColour' in options) || !Array.isArray(options.ignoredColour) || options.ignoredColour.length !== 4 || !options.ignoredColour.every(val => typeof val === 'number')) {
-            throw new Error(`Invalid options: ${JSON.stringify(options)}.`);
-        }
         const { xMargin, yMargin } = margins;
         const { x: tileWidth, y: tileHeight } = tileSize;
         //Add zero as first element to represent the filter byte.
