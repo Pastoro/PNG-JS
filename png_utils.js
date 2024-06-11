@@ -201,182 +201,73 @@ class png {
      * @returns {Array} The unfiltered pixel data.
      */
     reverseFiltering(arrayBuffer) {
-        arrayBuffer = Array.from(arrayBuffer);
+        const array = Array.from(arrayBuffer);
         const { widthPixels } = this.data[0].chunkInfo;
         const widthBytes = (widthPixels * 4) + 1;
-        let filterByte;
-        //The first element of the inner array is the filter method integer.
-        let res = [[]];
+        const res = [];
         let lineNum = -1;
-
-        let tempArr;
         let pixelCount = 0;
-        let curPixel;
-        for (let i = 0; i < arrayBuffer.length; i += 4) {
+        let filterByte;
 
-            if (i % widthBytes === 0 || i === 0) {
-                tempArr = arrayBuffer.slice(i, i + 4);
-                filterByte = arrayBuffer[i];
-                i++;
+        for (let i = 0; i < array.length; i += 4) {
+            // Start of a new line
+            if (i % widthBytes === 0) {
+                filterByte = array[i++];
+                res[++lineNum] = [filterByte];
                 pixelCount = 0;
-                lineNum++;
             }
-            if (res[lineNum] === undefined || res[lineNum].length === 0) {
-                res[lineNum] = [filterByte];
-                tempArr = arrayBuffer.slice(i, i + 4);
-            }
-            curPixel = arrayBuffer.slice(i, i + 4);
+
+            const curPixel = array.slice(i, i + 4);
+            let prevPixel = res[lineNum][pixelCount];
+            let prevLinePixel = lineNum > 0 ? res[lineNum - 1][pixelCount + 1] : [0, 0, 0, 0];
 
             switch (filterByte) {
-                // 0 = None
                 case 0:
                     res[lineNum].push(curPixel);
                     break;
-                // 1 = Sub
                 case 1:
-                    if (i > widthBytes * (lineNum) + 3) {
-                        let c = -1;
-
-                        res[lineNum].push(curPixel.map((x) => {
-                            c++;
-                            let ret = x + tempArr[c];
-                            if (ret >= 256) {
-                                ret = ret - 256;
-                            };
-                            return ret;
-                        }));
-                        tempArr = res[lineNum][pixelCount + 1];
+                    if (pixelCount > 0) {
+                        const subPixel = curPixel.map((x, idx) => (x + prevPixel[idx]) % 256);
+                        res[lineNum].push(subPixel);
+                        prevPixel = subPixel;
                     } else {
-                        tempArr = curPixel;
                         res[lineNum].push(curPixel);
+                        prevPixel = curPixel;
                     }
                     break;
-                // 2 = up    
                 case 2:
-                    if (lineNum > 0) {
-                        let c = 0;
-                        res[lineNum].push(curPixel.map((x) => {
-                            let ret = x + res[lineNum - 1][pixelCount + 1][c];
-                            if (ret >= 256) {
-                                ret -= 256;
-                            };
-                            c++;
-                            return ret;
-                        }));
-                    } else {
-                        tempArr = curPixel;
-                        res[lineNum].push(curPixel);
-                    }
+                    const upPixel = curPixel.map((x, idx) => (x + prevLinePixel[idx]) % 256);
+                    res[lineNum].push(upPixel);
                     break;
-                // 3 = average
                 case 3:
-
-                    if (lineNum > 0 && i > widthBytes * (lineNum) + 3) {
-                        let c = 0;
-                        res[lineNum].push(curPixel.map((x) => {
-                            let ret = x + ~~((res[lineNum][pixelCount + 1][c] + res[lineNum - 1][pixelCount + 1][c]) / 2);
-                            if (ret >= 256) {
-                                ret -= 256;
-                            };
-                            c++;
-                            return ret;
-                        }));
-                    } else {
-                        let c = 0;
-                        let tmp = [0, 0, 0, 0];
-                        if (!(lineNum > 0)) {
-                            res[lineNum].push(curPixel.map((x) => {
-                                let ret = x + ~~((res[lineNum][pixelCount + 1][c] + tmp[c]) / 2);
-                                if (ret >= 256) {
-                                    ret -= 256;
-                                };
-                                c++;
-                                return ret;
-                            }));
-                        } else if (!(i > widthBytes * (lineNum) + 3)) {
-                            let c = 0;
-                            res[lineNum].push(curPixel.map((x) => {
-                                let ret = x + ~~((tmp[c] + res[lineNum - 1][pixelCount + 1]) / 2);
-                                if (ret >= 256) {
-                                    ret -= 256;
-                                };
-                                c++;
-                                return ret;
-                            }));
-                        }
-                        else {
-                            let c = 0;
-                            res[lineNum].push(curPixel.map((x) => {
-                                let ret = x + ~~((tmp[c] + tmp[c]) / 2);
-                                if (ret >= 256) {
-                                    ret -= 256;
-                                }; c++;
-                                return ret;
-                            }));
-                        }
-                        tempArr = curPixel;
-                        res[lineNum].push(curPixel);
-                    }
+                    const avgPixel = curPixel.map((x, idx) => {
+                        const left = pixelCount > 0 ? prevPixel[idx] : 0;
+                        const up = lineNum > 0 ? prevLinePixel[idx] : 0;
+                        return (x + Math.floor((left + up) / 2)) % 256;
+                    });
+                    res[lineNum].push(avgPixel);
                     break;
-                // 4 = Paeth
                 case 4:
-                    let a, b, c;
-                    if (lineNum > 0 && pixelCount !== 0) {
-                        a = res[lineNum][pixelCount];
-                        b = res[lineNum - 1][pixelCount + 1];
-                        c = res[lineNum - 1][pixelCount];
-                    } else if (pixelCount === 0 && lineNum > 0) {
-                        a = [0, 0, 0, 0];
-                        b = res[lineNum - 1][pixelCount + 1];
-                        c = [0, 0, 0, 0];
-
-                    } else if (pixelCount !== 0 & !(lineNum > 0)) {
-                        a = res[lineNum][pixelCount];
-                        b = [0, 0, 0, 0];
-                        c = [0, 0, 0, 0];
-
-                    } else {
-                        a = [0, 0, 0, 0];
-                        b = [0, 0, 0, 0];
-                        c = [0, 0, 0, 0];
-                    }
-
-
-                    const p = a.reduce((acc, curr) => acc + curr) + b.reduce((acc, curr) => acc + curr) - c.reduce((acc, curr) => acc + curr);
-                    const pa = Math.abs(p - a.reduce((acc, curr) => acc + curr));
-                    const pb = Math.abs(p - b.reduce((acc, curr) => acc + curr));
-                    const pc = Math.abs(p - c.reduce((acc, curr) => acc + curr));
-                    let ret = [];
-                    let ref;
-                    if (pa <= pb && pa <= pc) {
-
-                        for (let j = 0; j < 4; j++) {
-                            ref = a[j] + curPixel[j];
-                            if (ref >= 256) { ref -= 256; }
-                            ret.push(ref);
-                        }
-                    } else if (pb <= pc) {
-                        for (let j = 0; j < 4; j++) {
-                            ref = b[j] + curPixel[j];
-                            if (ref >= 256) { ref -= 256; }
-                            ret.push(ref);
-                        }
-                    } else {
-                        for (let j = 0; j < 4; j++) {
-                            ref = c[j] + curPixel[j];
-                            if (ref >= 256) { ref -= 256; }
-                            ret.push(ref);
-                        }
-                    }
-
-
-                    res[lineNum].push(ret);
+                    const paethPixel = curPixel.map((x, idx) => {
+                        const a = pixelCount > 0 ? prevPixel[idx] : 0;
+                        const b = lineNum > 0 ? prevLinePixel[idx] : 0;
+                        const c = (pixelCount > 0 && lineNum > 0) ? res[lineNum - 1][pixelCount][idx] : 0;
+                        const p = a + b - c;
+                        const pa = Math.abs(p - a);
+                        const pb = Math.abs(p - b);
+                        const pc = Math.abs(p - c);
+                        const pr = (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c);
+                        return (x + pr) % 256;
+                    });
+                    res[lineNum].push(paethPixel);
                     break;
                 default:
                     throw new Error("Unexpected filter byte.");
             }
+
             pixelCount++;
         }
+
         return res;
     }
     /**
@@ -388,7 +279,6 @@ class png {
      * @throws Will throw an error if it fails to extract a sub-image for whatever reason.
      */
     subImage(imageDataBuffer, tileSize, margins = { xMargin: 0, yMargin: 0 }) {
-
         if (!Array.isArray(imageDataBuffer)) {
             throw new Error(`Incorrect type for imageDataBuffer. Type of ${typeof imageDataBuffer}`);
         }
