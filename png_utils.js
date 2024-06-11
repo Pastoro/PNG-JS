@@ -161,10 +161,10 @@ class png {
             offset += chunk.length;
         }
 
-        return dataBuffer;
+        return Array.from(dataBuffer);
     }
     /**
-     * Compress data using deflate algorithm.
+     * Compress data using inflate algorithm.
      * @param {ArrayBuffer} arrayBuffer - The data to be compressed.
      * @returns {Promise<Uint8Array>}
      */
@@ -197,6 +197,7 @@ class png {
      * Reconstructs the original, unfiltered values for each pixel in an ArrayBuffer.
      * [PNG Specification](http://www.libpng.org/pub/png/spec/iso/index-object.html#9Filters)
      * @param {ArrayBuffer} arrayBuffer The filtered pixel data.
+     * @throws Will throw an error if the filter byte of a line is incorrect.
      * @returns {Array} The unfiltered pixel data.
      */
     reverseFiltering(arrayBuffer) {
@@ -383,10 +384,10 @@ class png {
      * @param {Array<Array<Number>>} imageDataBuffer Expects unfiltered RGBA values.
      * @param {{x:number,y:number}} tileSize 
      * @param {{xMargin:number,yMargin:number}} margins The margins around the image.
-     * @param {number} separation Number of pixels separating tiles from one another.
-     * @param {{ignoredColour: number[]}} options Ignored RGBA value gets converted to [0,0,0,0].
+     * @throws Will throw an error if the arguments passed to subImage are incorrect.
+     * @throws Will throw an error if it fails to extract a sub-image for whatever reason.
      */
-    subImage(imageDataBuffer, tileSize, margins = { xMargin: 0, yMargin: 0 }, separation = 0, options = { ignoredColour: [0, 0, 0, 0] }) {
+    subImage(imageDataBuffer, tileSize, margins = { xMargin: 0, yMargin: 0 }) {
 
         if (!Array.isArray(imageDataBuffer)) {
             throw new Error(`Incorrect type for imageDataBuffer. Type of ${typeof imageDataBuffer}`);
@@ -394,42 +395,24 @@ class png {
         if (typeof tileSize !== 'object' || !('x' in tileSize) || !('y' in tileSize) || typeof tileSize.x !== 'number' || typeof tileSize.y !== 'number' || tileSize.x <= 0 || tileSize.y <= 0) {
             throw new Error(`Invalid tileSize: ${JSON.stringify(tileSize)}.`);
         }
-        if (typeof margins !== 'object' || typeof margins.x !== 'number' || typeof margins.y !== 'number') {
+        if (typeof margins !== 'object' || typeof margins.xMargin !== 'number' || typeof margins.yMargin !== 'number') {
             throw new Error(`Invalid margins: ${JSON.stringify(margins)}.`);
-        }
-        if (typeof separation !== 'number' || separation < 0) {
-            throw new Error(`Invalid separation: ${separation}.`);
         }
         if (typeof options !== 'object' || !('ignoredColour' in options) || !Array.isArray(options.ignoredColour) || options.ignoredColour.length !== 4 || !options.ignoredColour.every(val => typeof val === 'number')) {
             throw new Error(`Invalid options: ${JSON.stringify(options)}.`);
         }
         const { xMargin, yMargin } = margins;
         const { x: tileWidth, y: tileHeight } = tileSize;
-
-        let xOffset = xMargin;
-        let yOffset = yMargin;
-        let tileset = [];
-
-        // Calculate the number of rows and columns of tiles
-        const numRows = tileHeight + separation > 0 ? Math.floor((imageDataBuffer.length - yMargin) / (tileHeight + separation)) : 0;
-        const numCols = tileWidth + separation > 0 ? Math.floor((imageDataBuffer[0].length - xMargin) / (tileWidth + separation)) : 0;
+        //Add zero as first element to represent the filter byte.
+        let subImage = [0];
         try {
-            for (let row = 0; row < numRows; row++) {
-                for (let col = 0; col < numCols; col++) {
-                    const tile = [];
-                    for (let i = yOffset; i < yOffset + tileHeight; i++) {
-                        const rowData = imageDataBuffer[i].slice(xOffset, xOffset + tileWidth);
-                        tile.push(rowData);
-                    }
-                    tileset.push(tile);
-                    xOffset += tileWidth + separation;
-                }
-
-                xOffset = xMargin;
-                yOffset += tileHeight + separation;
+            for (let i = yMargin; i < tileHeight + yMargin; i++) {
+                subImage.push(imageDataBuffer[i].slice(xMargin + 1, xMargin + 1 + tileWidth));
             }
         } catch (e) {
             throw new Error(`Error trying to get subimage. ${e.message}`);
         }
+        return subImage;
     }
+
 }
