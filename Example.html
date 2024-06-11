@@ -12,6 +12,7 @@
     document.getElementById("tilesetSelector").addEventListener('change', async (evt) => {
         const myPNG = await new png(evt);
         const decompressedData = await myPNG.decompressIDATData();
+        console.log(myPNG.data)
         const unfilteredData = myPNG.reverseFiltering(decompressedData);
         console.log(myPNG.subImage(unfilteredData, { x: 64, y: 64 }, { xMargin: 0, yMargin: 0 }));
     })

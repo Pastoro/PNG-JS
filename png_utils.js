@@ -71,7 +71,7 @@ class png {
 
         let utf8Decode = new TextDecoder("utf-8");
         let chunks = [];
-        //First 8 bytes are the file signature which should be reconstructed by the user after modifying the image.
+        //First 8 bytes are the file signature which should be added back by the user after modifying the image.
         let pos = 8;
         let size, crc, offset, fourCC;
 
@@ -96,11 +96,11 @@ class png {
                     chunkInfo: {
                         widthPixels: dataView.getUint32(16),
                         heightPixels: dataView.getUint32(20),
-                        bitDepth: dataView.getUint32(21),
-                        colourType: dataView.getUint32(22),
-                        compressionMethod: dataView.getUint32(23),
-                        filterMethod: dataView.getUint32(24),
-                        interlaceMethod: dataView.getUint32(25),
+                        bitDepth: dataView.getUint8(24),
+                        colourType: dataView.getUint8(25),
+                        compressionMethod: dataView.getInt8(26),
+                        filterMethod: dataView.getUint8(27),
+                        interlaceMethod: dataView.getUint8(28),
                     },
                 });
             } else {
