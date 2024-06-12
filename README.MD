@@ -3,7 +3,7 @@ PNG_Utils is a PNG decoder and collection of useful functions to read, parse, an
 
 Usage
 ----
-``` 
+```js
     //With event
     function foo(evt) {
     const myPNG = await new png(evt);
@@ -16,6 +16,7 @@ Usage
 ```
 Decompression, unfiltering, and extracting sub-images.
 ----
+```js
     function foo(evt) {
         const myPNG = await new png(evt);
         const decompressedData = await myPNG.decompressIDATData();
