@@ -18,6 +18,8 @@ class png {
         this.data = null;
         return (async () => {
             await this.#initialize(event);
+            //The first eight bytes of a PNG datastream always contain the following (decimal) values.
+            this.data.signature = "137 80 78 71 13 10 26 10";
             return this;
         })();
     }
@@ -71,6 +73,7 @@ class png {
 
         let utf8Decode = new TextDecoder("utf-8");
         let chunks = [];
+        let data;
         //First 8 bytes are the file signature which should be added back by the user after modifying the image.
         let pos = 8;
         let size, crc, offset, fourCC;
@@ -85,33 +88,66 @@ class png {
             // crc
             crc = dataView.getUint32(pos);
             pos += 4;
+
+            data = bytes.slice(offset, offset + size)
             // store chunk
-            if (fourCC === "IHDR") {
+            switch (fourCC) {
+                case "IHDR": {
+                    chunks.push({
+                        fourCC: fourCC,
+                        size: size,//Only size of data, excluding fourCC and CRC
+                        data: data,
+                        offset: offset,
+                        crc: crc,
+                        chunkInfo: {
+                            widthPixels: dataView.getUint32(16),
+                            heightPixels: dataView.getUint32(20),
+                            bitDepth: dataView.getUint8(24),
+                            colourType: dataView.getUint8(25),
+                            compressionMethod: dataView.getInt8(26),
+                            filterMethod: dataView.getUint8(27),
+                            interlaceMethod: dataView.getUint8(28),
+                        },
+                    });
+                    break;
+                }
+                case "PLTE":
+                    if (size % 3 !== 0) {
+                        throw new Error("PLTE chunk length must be divisible by 3.")
+                    }
+                    if (chunks[0].chunkInfo.colourType === 3 && size === 0) {
+                        throw new Error("Images of colourtype 3 must include a PLTE chunk.")
+                    } else if ((chunks[0].chunkInfo.colourType === 0 || chunks[0].chunkInfo.colourType === 4) && size !== 0) {
+                        console.warn(`Images of colourtype ${chunks[0].chunkInfo.colourType} shouldn't have PLTE chunks. It will be ignored.`)
+                    }
+                    chunks.push({
+                        fourCC: fourCC,
+                        size: size,//Only size of data, excluding fourCC and CRC
+                        data: data,
+                        offset: offset,
+                        crc: crc,
+                    });
+                    break;
+                case "tRNS":
+                    chunks.push({
+                        fourCC: fourCC,
+                        size: size,//Only size of data, excluding fourCC and CRC
+                        data: data,
+                        offset: offset,
+                        crc: crc,
+                    });
+                    break;
+            default: {
                 chunks.push({
                     fourCC: fourCC,
                     size: size,//Only size of data, excluding fourCC and CRC
-                    data: bytes.slice(offset, offset + size),
-                    offset: offset,
-                    crc: crc,
-                    chunkInfo: {
-                        widthPixels: dataView.getUint32(16),
-                        heightPixels: dataView.getUint32(20),
-                        bitDepth: dataView.getUint8(24),
-                        colourType: dataView.getUint8(25),
-                        compressionMethod: dataView.getInt8(26),
-                        filterMethod: dataView.getUint8(27),
-                        interlaceMethod: dataView.getUint8(28),
-                    },
-                });
-            } else {
-                chunks.push({
-                    fourCC: fourCC,
-                    size: size,//Only size of data, excluding fourCC and CRC
-                    data: bytes.slice(offset, offset + size),
+                    data: data,
                     offset: offset,
                     crc: crc,
                 });
             }
+            }
+
         }
 
         return { chunks: chunks };
@@ -165,19 +201,21 @@ class png {
     }
     /**
      * Compress data using inflate algorithm.
-     * @param {ArrayBuffer} arrayBuffer - The data to be compressed.
      * @returns {Promise<Uint8Array>}
      */
-    async compressIDATData(arrayBuffer) {
+    async compressIDATData() {
+        const idatData = this.#concatIDATChunks();
+
         const idatStream = new ReadableStream({
             start(controller) {
-                controller.enqueue(arrayBuffer);
+                controller.enqueue(idatData);
                 controller.close();
             }
         });
-
+        
         const compressionStream = idatStream.pipeThrough(new CompressionStream('deflate'));
         const reader = compressionStream.getReader();
+        
         let chunks = [];
         let done, value;
         while ({ done, value } = await reader.read(), !done) {
