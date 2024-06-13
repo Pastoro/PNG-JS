@@ -89,7 +89,7 @@ class png {
             crc = dataView.getUint32(pos);
             pos += 4;
 
-            data = bytes.slice(offset, offset + size)
+            data = bytes.slice(offset, offset + size);
             // store chunk
             switch (fourCC) {
                 case "IHDR": {
@@ -113,12 +113,12 @@ class png {
                 }
                 case "PLTE":
                     if (size % 3 !== 0) {
-                        throw new Error("PLTE chunk length must be divisible by 3.")
+                        throw new Error("PLTE chunk length must be divisible by 3.");
                     }
                     if (chunks[0].chunkInfo.colourType === 3 && size === 0) {
-                        throw new Error("Images of colourtype 3 must include a PLTE chunk.")
+                        throw new Error("Images of colourtype 3 must include a PLTE chunk.");
                     } else if ((chunks[0].chunkInfo.colourType === 0 || chunks[0].chunkInfo.colourType === 4) && size !== 0) {
-                        console.warn(`Images of colourtype ${chunks[0].chunkInfo.colourType} shouldn't have PLTE chunks. It will be ignored.`)
+                        console.warn(`Images of colourtype ${chunks[0].chunkInfo.colourType} shouldn't have PLTE chunks. It will be ignored.`);
                     }
                     chunks.push({
                         fourCC: fourCC,
@@ -137,15 +137,15 @@ class png {
                         crc: crc,
                     });
                     break;
-            default: {
-                chunks.push({
-                    fourCC: fourCC,
-                    size: size,//Only size of data, excluding fourCC and CRC
-                    data: data,
-                    offset: offset,
-                    crc: crc,
-                });
-            }
+                default: {
+                    chunks.push({
+                        fourCC: fourCC,
+                        size: size,//Only size of data, excluding fourCC and CRC
+                        data: data,
+                        offset: offset,
+                        crc: crc,
+                    });
+                }
             }
 
         }
@@ -212,10 +212,10 @@ class png {
                 controller.close();
             }
         });
-        
+
         const compressionStream = idatStream.pipeThrough(new CompressionStream('deflate'));
         const reader = compressionStream.getReader();
-        
+
         let chunks = [];
         let done, value;
         while ({ done, value } = await reader.read(), !done) {
@@ -241,71 +241,81 @@ class png {
     reverseFiltering(arrayBuffer) {
         const array = Array.from(arrayBuffer);
         const { widthPixels } = this.data[0].chunkInfo;
-        const widthBytes = (widthPixels * 4) + 1;
+        const widthBytes = this.data.some(e => e.fourCC === "PLTE") ? (widthPixels) + 1 : (widthPixels * 4) + 1;
         const res = [];
         let lineNum = -1;
         let pixelCount = 0;
         let filterByte;
-
-        for (let i = 0; i < array.length; i += 4) {
-            // Start of a new line
-            if (i % widthBytes === 0) {
-                filterByte = array[i++];
-                res[++lineNum] = [filterByte];
-                pixelCount = 0;
+        if (this.data.some(e => e.fourCC === "PLTE")) {
+            const plte = this.data[this.data.map(e => e.fourCC).indexOf("PLTE")].data;
+            for (let i = 0; i < array.length; i++) {
+                if (i % widthBytes === 0) {
+                    filterByte = array[i++];
+                    res[++lineNum] = [0];
+                }
+                res[lineNum].push(plte.slice(array[i] * 3, array[i] * 3 + 3));
             }
-
-            const curPixel = array.slice(i, i + 4);
-            let prevPixel = res[lineNum][pixelCount];
-            let prevLinePixel = lineNum > 0 ? res[lineNum - 1][pixelCount + 1] : [0, 0, 0, 0];
-
-            switch (filterByte) {
-                case 0:
-                    res[lineNum].push(curPixel);
-                    break;
-                case 1:
-                    if (pixelCount > 0) {
-                        const subPixel = curPixel.map((x, idx) => (x + prevPixel[idx]) % 256);
-                        res[lineNum].push(subPixel);
-                        prevPixel = subPixel;
-                    } else {
-                        res[lineNum].push(curPixel);
-                        prevPixel = curPixel;
-                    }
-                    break;
-                case 2:
-                    const upPixel = curPixel.map((x, idx) => (x + prevLinePixel[idx]) % 256);
-                    res[lineNum].push(upPixel);
-                    break;
-                case 3:
-                    const avgPixel = curPixel.map((x, idx) => {
-                        const left = pixelCount > 0 ? prevPixel[idx] : 0;
-                        const up = lineNum > 0 ? prevLinePixel[idx] : 0;
-                        return (x + Math.floor((left + up) / 2)) % 256;
-                    });
-                    res[lineNum].push(avgPixel);
-                    break;
-                case 4:
-                    const paethPixel = curPixel.map((x, idx) => {
-                        const a = pixelCount > 0 ? prevPixel[idx] : 0;
-                        const b = lineNum > 0 ? prevLinePixel[idx] : 0;
-                        const c = (pixelCount > 0 && lineNum > 0) ? res[lineNum - 1][pixelCount][idx] : 0;
-                        const p = a + b - c;
-                        const pa = Math.abs(p - a);
-                        const pb = Math.abs(p - b);
-                        const pc = Math.abs(p - c);
-                        const pr = (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c);
-                        return (x + pr) % 256;
-                    });
-                    res[lineNum].push(paethPixel);
-                    break;
-                default:
-                    throw new Error("Unexpected filter byte.");
-            }
-
-            pixelCount++;
         }
+        else {
+            for (let i = 0; i < array.length; i += 4) {
+                // Start of a new line
+                if (i % widthBytes === 0) {
+                    filterByte = array[i++];
+                    res[++lineNum] = [filterByte];
+                    pixelCount = 0;
+                }
 
+                const curPixel = array.slice(i, i + 4);
+                let prevPixel = res[lineNum][pixelCount];
+                let prevLinePixel = lineNum > 0 ? res[lineNum - 1][pixelCount + 1] : [0, 0, 0, 0];
+
+                switch (filterByte) {
+                    case 0:
+                        res[lineNum].push(curPixel);
+                        break;
+                    case 1:
+                        if (pixelCount > 0) {
+                            const subPixel = curPixel.map((x, idx) => (x + prevPixel[idx]) % 256);
+                            res[lineNum].push(subPixel);
+                            prevPixel = subPixel;
+                        } else {
+                            res[lineNum].push(curPixel);
+                            prevPixel = curPixel;
+                        }
+                        break;
+                    case 2:
+                        const upPixel = curPixel.map((x, idx) => (x + prevLinePixel[idx]) % 256);
+                        res[lineNum].push(upPixel);
+                        break;
+                    case 3:
+                        const avgPixel = curPixel.map((x, idx) => {
+                            const left = pixelCount > 0 ? prevPixel[idx] : 0;
+                            const up = lineNum > 0 ? prevLinePixel[idx] : 0;
+                            return (x + Math.floor((left + up) / 2)) % 256;
+                        });
+                        res[lineNum].push(avgPixel);
+                        break;
+                    case 4:
+                        const paethPixel = curPixel.map((x, idx) => {
+                            const a = pixelCount > 0 ? prevPixel[idx] : 0;
+                            const b = lineNum > 0 ? prevLinePixel[idx] : 0;
+                            const c = (pixelCount > 0 && lineNum > 0) ? res[lineNum - 1][pixelCount][idx] : 0;
+                            const p = a + b - c;
+                            const pa = Math.abs(p - a);
+                            const pb = Math.abs(p - b);
+                            const pc = Math.abs(p - c);
+                            const pr = (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c);
+                            return (x + pr) % 256;
+                        });
+                        res[lineNum].push(paethPixel);
+                        break;
+                    default:
+                        throw new Error("Unexpected filter byte.");
+                }
+
+                pixelCount++;
+            }
+        }
         return res;
     }
     /**
@@ -328,11 +338,11 @@ class png {
         }
         const { xMargin, yMargin } = margins;
         const { x: tileWidth, y: tileHeight } = tileSize;
-        //Add zero as first element to represent the filter byte.
-        let subImage = [0];
+        let subImage = [];
         try {
             for (let i = yMargin; i < tileHeight + yMargin; i++) {
-                subImage.push(imageDataBuffer[i].slice(xMargin + 1, xMargin + 1 + tileWidth));
+                //Add zero as first element to represent the filter byte.
+                subImage.push([].concat([0], imageDataBuffer[i].slice(xMargin + 1, xMargin + 1 + tileWidth)));
             }
         } catch (e) {
             throw new Error(`Error trying to get subimage. ${e.message}`);
