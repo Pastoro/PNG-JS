@@ -246,9 +246,11 @@ class png {
         let lineNum = -1;
         let pixelCount = 0;
         let filterByte;
+        //Currently only for indexed-colour images.
         if (this.data.some(e => e.fourCC === "PLTE")) {
-            const plte = this.data[this.data.map(e => e.fourCC).indexOf("PLTE")].data;
+            const plte = this.data.find(e => e.fourCC === "PLTE").data;
             for (let i = 0; i < array.length; i++) {
+                // Start of a new line
                 if (i % widthBytes === 0) {
                     filterByte = array[i++];
                     res[++lineNum] = [0];
@@ -256,6 +258,7 @@ class png {
                 res[lineNum].push(plte.slice(array[i] * 3, array[i] * 3 + 3));
             }
         }
+        //Truecolour with alpha.
         else {
             for (let i = 0; i < array.length; i += 4) {
                 // Start of a new line
