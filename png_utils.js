@@ -167,7 +167,7 @@ class png {
         return new Uint8Array(idatData);
     }
     /**
-     * Decompress IDAT data.
+     * Decompress IDAT data using inflate algorithm.
      * @returns {Promise<Uint8Array>}
      */
     async decompressIDATData() {
@@ -200,11 +200,15 @@ class png {
         return Array.from(dataBuffer);
     }
     /**
-     * Compress data using inflate algorithm.
+     * Compress data using deflate algorithm.
+     * @param Array Data to be compressed.
      * @returns {Promise<Uint8Array>}
      */
-    async compressIDATData() {
-        const idatData = this.#concatIDATChunks();
+    async compressIDATData(idatData = undefined) {
+        if (idatData === undefined) {
+            throw new Error("You haven't supplied any data to compress.");
+        }
+        idatData = new Uint8Array(idatData);
 
         const idatStream = new ReadableStream({
             start(controller) {
@@ -221,6 +225,7 @@ class png {
         while ({ done, value } = await reader.read(), !done) {
             chunks.push(value);
         }
+
         let dataBuffer = new Uint8Array(chunks.reduce((acc, val) => acc + val.length, 0));
         let offset = 0;
         for (let chunk of chunks) {
