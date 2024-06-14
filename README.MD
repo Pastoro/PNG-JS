@@ -11,9 +11,7 @@ Extracting one 64x64 tile from the below tilesheet:
         const myPNG = await new png(evt);
         const decompressedData = await myPNG.decompressIDATData();
         const unfilteredData = myPNG.reverseFiltering(decompressedData);
-        for (let i = 0; i < 64;i++){
         const subImage = myPNG.subImage(unfilteredData, { x: 64, y: 64 }, { xMargin: 0, yMargin: 0 });
-        }
     }
 ```
 
